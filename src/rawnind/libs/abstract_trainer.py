@@ -1215,6 +1215,14 @@ class ImageToImageNNTraining(ImageToImageNN):
         fpath = os.path.join(self.save_dpath, "saved_models", f"iter_{step}.pt")
         torch.save(self.model.state_dict(), fpath)
         torch.save(self.optimizer.state_dict(), fpath + ".opt")
+        # write raw f16 coefficients of the model into a file.
+        # probably in the future also write some information about training data/loss/network configuration? like a hash?
+        with open(fpath+'.dat', 'wb') as f:
+            for param in self.model.parameters():
+                p = param.data.detach().cpu().numpy().astype('float16')
+                # print(type(param), param.size())
+                # print(np.shape(p))
+                f.write(p.tobytes())
 
     def cleanup_models(self):
         keepers: list[str] = [

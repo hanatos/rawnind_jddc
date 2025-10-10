@@ -44,7 +44,10 @@ def get_activation_class_params(activation: str) -> tuple:
     else:
         exit(f"get_activation_class: unknown activation function: {activation}")
 
-
+# this is going to be rggb in planes. 5th channel is noise estimation
+# INPUT_CHANNELS_COUNT = 5
+# compat with the rest of the code here:
+INPUT_CHANNELS_COUNT = 4
 class UtNet2(Denoiser):
     def __init__(
         self,

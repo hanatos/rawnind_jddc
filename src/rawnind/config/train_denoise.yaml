@@ -10,9 +10,9 @@ patience: 100000
 lr_multiplier: 0.85
 transfer_function_valtest: pq
 clean_dataset_yamlfpaths:
-  - ../../datasets/extraraw/trougnouf/crops_metadata.yaml
+#  - ../../datasets/extraraw/trougnouf/crops_metadata.yaml
 #  - ../../datasets/extraraw/SID/crops_metadata.yaml  # could be useful in testing
-  - ../../datasets/extraraw/raw-pixls/crops_metadata.yaml
+#  - ../../datasets/extraraw/raw-pixls/crops_metadata.yaml
 noise_dataset_yamlfpaths:
   - ../../datasets/RawNIND/RawNIND_masks_and_alignments.yaml
 funit: 32

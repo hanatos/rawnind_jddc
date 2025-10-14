@@ -2,6 +2,7 @@
 
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 # sys.path.append("..")
 from rawnind.libs import rawproc
@@ -78,8 +79,11 @@ class UtNet2(Denoiser):
         self.con3 = nn.Conv2d(48, 48, 3, padding='same', padding_mode=pm)
         self.dec4 = nn.Conv2d(48+32, 16, 3, padding='same', padding_mode=pm)
         self.con4 = nn.Conv2d(16, 16, 3, padding='same', padding_mode=pm)
-        self.dec5 = nn.Conv2d(16+INPUT_CHANNELS_COUNT, 12, 3, padding='same', padding_mode=pm)
-        self.con5 = nn.Conv2d(12, 12, 3, padding='same', padding_mode=pm)
+        self.dec5 = nn.Conv2d(16+INPUT_CHANNELS_COUNT, 16, 3, padding='same', padding_mode=pm)
+        self.con5 = nn.Conv2d(16, 16, 3, padding='same', padding_mode=pm)
+        self.dec6 = nn.Conv2d(16, 3, 3, padding='same', padding_mode=pm)
+        self.pool = nn.MaxPool2d(2, 2)
+        self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
 
     def forward(self, I):
         extr = F.relu(self.enc0(I))
@@ -112,6 +116,7 @@ class UtNet2(Denoiser):
         x     = F.relu(self.dec5(torch.cat([self.upsample(x),   I],  1)))
         x     = F.relu(self.con5(x))
         # x     = F.relu(self.con5a(x))
+        x     = F.relu(self.dec6(self.upsample(x)))
         
         return x
 

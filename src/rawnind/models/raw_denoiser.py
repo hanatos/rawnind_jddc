@@ -79,11 +79,19 @@ class UtNet2(Denoiser):
         self.con3 = nn.Conv2d(48, 48, 3, padding='same', padding_mode=pm)
         self.dec4 = nn.Conv2d(48+32, 16, 3, padding='same', padding_mode=pm)
         self.con4 = nn.Conv2d(16, 16, 3, padding='same', padding_mode=pm)
-        self.dec5 = nn.Conv2d(16+INPUT_CHANNELS_COUNT, 16, 3, padding='same', padding_mode=pm)
-        self.con5 = nn.Conv2d(16, 16, 3, padding='same', padding_mode=pm)
-        self.dec6 = nn.Conv2d(16, 3, 3, padding='same', padding_mode=pm)
+        self.dec5 = nn.Conv2d(16+INPUT_CHANNELS_COUNT, 12, 3, padding='same', padding_mode=pm)
+        self.con5 = nn.Conv2d(12, 12, 3, padding='same', padding_mode=pm)
+        # self.dec6 = nn.Conv2d(16, 3, 3, padding='same', padding_mode=pm)
         self.pool = nn.MaxPool2d(2, 2)
         self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
+
+        self.con0a = nn.Conv2d(112, 112, 3, padding='same', padding_mode=pm)
+        self.con1a = nn.Conv2d(80, 80, 3, padding='same', padding_mode=pm)
+        self.con2a = nn.Conv2d(64, 64, 3, padding='same', padding_mode=pm)
+        self.con3a = nn.Conv2d(48, 48, 3, padding='same', padding_mode=pm)
+        self.con4a = nn.Conv2d(16, 16, 3, padding='same', padding_mode=pm)
+        self.con5a = nn.Conv2d(12, 12, 3, padding='same', padding_mode=pm)
+        self.output_module = nn.PixelShuffle(2)
 
     def forward(self, I):
         extr = F.relu(self.enc0(I))
@@ -98,28 +106,27 @@ class UtNet2(Denoiser):
         
         x     = F.relu(self.dec0(torch.cat([self.upsample(x_4), x_8],   1)))
         x     = F.relu(self.con0(x))
-        # x     = F.relu(self.con0a(x))
+        x     = F.relu(self.con0a(x))
         # x     = F.relu(self.dec1(torch.cat([self.upsample(x_8), x_16],  1)))
         x     = F.relu(self.dec1(torch.cat([self.upsample(x),   x_16],  1)))
         x     = F.relu(self.con1(x))
-        # x     = F.relu(self.con1a(x))
+        x     = F.relu(self.con1a(x))
         x     = F.relu(self.dec2(torch.cat([self.upsample(x),   x_32],  1)))
         x     = F.relu(self.con2(x))
-        # x     = F.relu(self.con2a(x))
+        x     = F.relu(self.con2a(x))
         x     = F.relu(self.dec3(torch.cat([self.upsample(x),   x_64],  1)))
         x     = F.relu(self.con3(x))
-        # x     = F.relu(self.con3a(x))
+        x     = F.relu(self.con3a(x))
         x     = F.relu(self.dec4(torch.cat([self.upsample(x),   x_128], 1)))
         # x     = F.relu(self.dec5(torch.cat([self.upsample(x),   extr],  1)))
         x     = F.relu(self.con4(x))
-        # x     = F.relu(self.con4a(x))
+        x     = F.relu(self.con4a(x))
         x     = F.relu(self.dec5(torch.cat([self.upsample(x),   I],  1)))
         x     = F.relu(self.con5(x))
-        # x     = F.relu(self.con5a(x))
-        x     = F.relu(self.dec6(self.upsample(x)))
-        
-        return x
-
+        x     = F.relu(self.con5a(x))
+        return self.output_module(x)
+        # x     = F.relu(self.dec6(self.upsample(x)))
+        # return x
 
 
 class OriginalUtNet2(Denoiser):

@@ -50,6 +50,9 @@ if __name__ == "__main__":
             infile, device=device
         )
         input_image = input_image.unsqueeze(0)
+        print(input_image.size())
+        input_image = torch.narrow(input_image, 2, 0, 1920);
+        input_image = torch.narrow(input_image, 3, 0, 1920);
         model = rawnind.models.raw_denoiser.UtNet2(
             in_channels=4 if model_is_bayer and not infile.endswith(".exr") else 3, funit=32
         )

@@ -95,17 +95,32 @@ class UtNet2(Denoiser):
         self.output_module = nn.PixelShuffle(2)
 
     def forward(self, I):
+        # this appears to come in as RGGB, as expected
+        # print(I.size())
+        # mask = torch.tensor([1,0,0,1], dtype=torch.float32).unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
+        # DEBUG zero out one channel:
+        # I = I*mask.to("cuda")
         extr = F.relu(self.enc0(I))
         # extr = F.relu(self.extr(extr))
         x_128 = self.pool(extr) # self.pool(F.relu(self.extr(extr)))
+        # XXX DEBUG x_128 comes out the same in python and in glsl
+        # return x_128[:,0:3,:,:]
+        # XXX DEBUG x     = F.relu(self.dec5(torch.cat([self.upsample(x),   I],  1)))
         # x_128 = self.pool(F.relu(self.enc0(I)))
         x_64  = self.pool(F.relu(self.enc1(x_128)))
         x_32  = self.pool(F.relu(self.enc2(x_64)))
         x_16  = self.pool(F.relu(self.enc3(x_32)))
+        # XXX DEBUG
+        # return x_16[:,0:3,:,:] # also comes out correctly
         x_8   = self.pool(F.relu(self.enc4(x_16)))
+        # XXX DEBUG this is broken!!
+        # return x_8[:,0:3,:,:]
         x_4   = self.pool(F.relu(self.enc5(x_8)))
+        # x_4 is mostly black
         
         x     = F.relu(self.dec0(torch.cat([self.upsample(x_4), x_8],   1)))
+        # XXX DEBUG this is broken!!
+        # return x[:,0:3,:,:]
         x     = F.relu(self.con0(x))
         x     = F.relu(self.con0a(x))
         # x     = F.relu(self.dec1(torch.cat([self.upsample(x_8), x_16],  1)))

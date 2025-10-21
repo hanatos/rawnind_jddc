@@ -1667,6 +1667,7 @@ class BayerImageToImageNN(ImageToImageNN):
 class BayerImageToImageNNTraining(ImageToImageNNTraining, BayerImageToImageNN):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.scaler = torch.amp.GradScaler(self.device)
 
     @staticmethod
     # def repack_batch(batch: tuple[dict], device: torch.device) -> dict:  # python 38 310 compat
@@ -1727,114 +1728,116 @@ class BayerImageToImageNNTraining(ImageToImageNNTraining, BayerImageToImageNN):
         if "timing" in self.debug_options or "spam" in self.debug_options:
             last_time = time.time()
 
-        model_output = self.model(batch["y_crops"])
-        if isinstance(self, DenoiseCompressTraining):
-            reconstructed_image, bpp = (
-                model_output["reconstructed_image"],
-                model_output["bpp"],
+        with torch.autocast(device_type="cuda",dtype=torch.float16):
+            model_output = self.model(batch["y_crops"])
+            if isinstance(self, DenoiseCompressTraining):
+                reconstructed_image, bpp = (
+                    model_output["reconstructed_image"],
+                    model_output["bpp"],
+                )
+            else:
+                reconstructed_image = model_output
+                bpp = 0
+            if "timing" in self.debug_options or "spam" in self.debug_options:
+                logging.debug(f"model time: {time.time() - last_time}")
+                last_time = time.time()
+            # print(f"model_output time: {time.time()-last_time}")
+            # last_time = time.time()
+            # match exposure, apply color profile, apply gamma
+            # if self.exposure_diff_penalty > 0:
+            #     approx_exposure_diff = self.compute_approx_exposure_diff(
+            #         batch["x_crops"],
+            #         batch["y_crops"],
+            #         reconstructed_image,
+            #         batch["mask_crops"],
+            #     )
+            # else:
+            #     approx_exposure_diff = 0
+            processed_output = self.process_net_output(
+                reconstructed_image, batch["rgb_xyz_matrix"], batch["x_crops"]
             )
-        else:
-            reconstructed_image = model_output
-            bpp = 0
-        if "timing" in self.debug_options or "spam" in self.debug_options:
-            logging.debug(f"model time: {time.time() - last_time}")
-            last_time = time.time()
-        # print(f"model_output time: {time.time()-last_time}")
-        # last_time = time.time()
-        # match exposure, apply color profile, apply gamma
-        # if self.exposure_diff_penalty > 0:
-        #     approx_exposure_diff = self.compute_approx_exposure_diff(
-        #         batch["x_crops"],
-        #         batch["y_crops"],
-        #         reconstructed_image,
-        #         batch["mask_crops"],
-        #     )
-        # else:
-        #     approx_exposure_diff = 0
-        processed_output = self.process_net_output(
-            reconstructed_image, batch["rgb_xyz_matrix"], batch["x_crops"]
-        )
-        if output_train_images:
-            # print(
-            #    f"training {batch['y_crops'].mean((0,2,3))=}, {model_output.mean((0,2,3))=}"
-            # )
-            visu_save_dir = os.path.join(self.save_dpath, "visu", f"iter_{self.step_n}")
-            os.makedirs(visu_save_dir, exist_ok=True)
-            for i in range(reconstructed_image.shape[0]):
-                with open(
-                    os.path.join(visu_save_dir, f"train_{i}_xyzm.txt"), "w"
-                ) as fp:
-                    fp.write(f"{batch['rgb_xyz_matrix'][i]}")
-                y_processed = (
-                    self.process_net_output(
-                        rawproc.demosaic(batch["y_crops"][i : i + 1].cpu()),
-                        batch["rgb_xyz_matrix"][i : i + 1].cpu(),
-                        batch["x_crops"][i : i + 1].cpu(),
+            if output_train_images:
+                # print(
+                #    f"training {batch['y_crops'].mean((0,2,3))=}, {model_output.mean((0,2,3))=}"
+                # )
+                visu_save_dir = os.path.join(self.save_dpath, "visu", f"iter_{self.step_n}")
+                os.makedirs(visu_save_dir, exist_ok=True)
+                for i in range(reconstructed_image.shape[0]):
+                    with open(
+                        os.path.join(visu_save_dir, f"train_{i}_xyzm.txt"), "w"
+                    ) as fp:
+                        fp.write(f"{batch['rgb_xyz_matrix'][i]}")
+                    y_processed = (
+                        self.process_net_output(
+                            rawproc.demosaic(batch["y_crops"][i : i + 1].cpu()),
+                            batch["rgb_xyz_matrix"][i : i + 1].cpu(),
+                            batch["x_crops"][i : i + 1].cpu(),
+                        )
+                        .squeeze(0)
+                        .numpy()
                     )
-                    .squeeze(0)
-                    .numpy()
-                )
-                raw.hdr_nparray_to_file(
-                    y_processed,
-                    os.path.join(
-                        visu_save_dir,
-                        f"train_{i}_debayered_ct_y.exr",
-                    ),
-                    color_profile="lin_rec2020",
-                )
-                raw.hdr_nparray_to_file(
-                    (processed_output[i].detach() * batch["mask_crops"][i])
-                    .cpu()
-                    .numpy(),
-                    os.path.join(
-                        visu_save_dir,
-                        f"train_{i}_processed_output_masked.exr",
-                    ),
-                    color_profile="lin_rec2020",
-                )
-                raw.hdr_nparray_to_file(
-                    processed_output[i].detach().cpu().numpy(),
-                    os.path.join(
-                        visu_save_dir,
-                        f"train_{i}_processed_output.exr",
-                    ),
-                    color_profile="lin_rec2020",
-                )
-                raw.hdr_nparray_to_file(
-                    (reconstructed_image[i].detach() * batch["mask_crops"][i])
-                    .cpu()
-                    .numpy(),
-                    os.path.join(
-                        visu_save_dir,
-                        f"train_{i}_output.exr",
-                    ),
-                    color_profile="lin_rec2020",
-                )
-                raw.hdr_nparray_to_file(
-                    batch["x_crops"][i].cpu().numpy(),
-                    os.path.join(
-                        visu_save_dir,
-                        f"train_{i}_gt.exr",
-                    ),
-                    color_profile="lin_rec2020",
-                )
-        processed_output = self.transfer(processed_output)
-        # print(f"processed_output time: {time.time()-last_time}")
-        # last_time = time.time()
-        gt = self.transfer(batch["x_crops"])
+                    raw.hdr_nparray_to_file(
+                        y_processed,
+                        os.path.join(
+                            visu_save_dir,
+                            f"train_{i}_debayered_ct_y.exr",
+                        ),
+                        color_profile="lin_rec2020",
+                    )
+                    raw.hdr_nparray_to_file(
+                        (processed_output[i].detach() * batch["mask_crops"][i])
+                        .cpu()
+                        .numpy(),
+                        os.path.join(
+                            visu_save_dir,
+                            f"train_{i}_processed_output_masked.exr",
+                        ),
+                        color_profile="lin_rec2020",
+                    )
+                    raw.hdr_nparray_to_file(
+                        processed_output[i].detach().cpu().numpy(),
+                        os.path.join(
+                            visu_save_dir,
+                            f"train_{i}_processed_output.exr",
+                        ),
+                        color_profile="lin_rec2020",
+                    )
+                    raw.hdr_nparray_to_file(
+                        (reconstructed_image[i].detach() * batch["mask_crops"][i])
+                        .cpu()
+                        .numpy(),
+                        os.path.join(
+                            visu_save_dir,
+                            f"train_{i}_output.exr",
+                        ),
+                        color_profile="lin_rec2020",
+                    )
+                    raw.hdr_nparray_to_file(
+                        batch["x_crops"][i].cpu().numpy(),
+                        os.path.join(
+                            visu_save_dir,
+                            f"train_{i}_gt.exr",
+                        ),
+                        color_profile="lin_rec2020",
+                    )
+            processed_output = self.transfer(processed_output)
+            # print(f"processed_output time: {time.time()-last_time}")
+            # last_time = time.time()
+            gt = self.transfer(batch["x_crops"])
 
-        # print(f"processed_input time: {time.time()-last_time}")
-        # last_time = time.time()
-        # apply mask, compute loss
-        if "timing" in self.debug_options or "spam" in self.debug_options:
-            logging.debug(f"processing time: {time.time() - last_time}")
-            last_time = time.time()
-        loss = self.compute_train_loss(
-            batch["mask_crops"],
-            processed_output,
-            gt,
-            bpp,  # , approx_exposure_diff
-        )
+            # print(f"processed_input time: {time.time()-last_time}")
+            # last_time = time.time()
+            # apply mask, compute loss
+            if "timing" in self.debug_options or "spam" in self.debug_options:
+                logging.debug(f"processing time: {time.time() - last_time}")
+                last_time = time.time()
+            loss = self.compute_train_loss(
+                batch["mask_crops"],
+                processed_output,
+                gt,
+                bpp,  # , approx_exposure_diff
+            )
+
 
         # print(f"loss time: {time.time()-last_time}")
         # last_time = time.time()
@@ -1843,13 +1846,17 @@ class BayerImageToImageNNTraining(ImageToImageNNTraining, BayerImageToImageNN):
             logging.debug(f"loss time: {time.time() - last_time}")
             last_time = time.time()
         optimizer.zero_grad()
-        loss.backward()
+        # loss.backward()
+        self.scaler.scale(loss).backward()
+        self.scaler.unscale_(optimizer)
         if isinstance(self, DenoiseCompressTraining):
             DenoiseCompressTraining.clip_gradient(optimizer, 5)
         # print(f"backward time: {time.time()-last_time}")
         # last_time = time.time()
 
-        optimizer.step()
+        # optimizer.step()
+        self.scaler.step(optimizer)
+        self.scaler.update()
         if "timing" in self.debug_options or "spam" in self.debug_options:
             logging.debug(f"bw+optim: {time.time() - last_time}")
             last_time = time.time()

@@ -1728,6 +1728,9 @@ class BayerImageToImageNNTraining(ImageToImageNNTraining, BayerImageToImageNN):
         if "timing" in self.debug_options or "spam" in self.debug_options:
             last_time = time.time()
 
+        # unfortunately this doesn't always work with f16, gradients become nan.
+        # might need to run a few iterations with float32 and then reduce precision as a fine tuning pass
+        # with torch.autocast(device_type="cuda",dtype=torch.float32):
         with torch.autocast(device_type="cuda",dtype=torch.float16):
             model_output = self.model(batch["y_crops"])
             if isinstance(self, DenoiseCompressTraining):

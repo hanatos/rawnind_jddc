@@ -45,105 +45,72 @@ def get_activation_class_params(activation: str) -> tuple:
     else:
         exit(f"get_activation_class: unknown activation function: {activation}")
 
-# this is going to be rggb in planes. 5th channel is noise estimation
-# INPUT_CHANNELS_COUNT = 5
-# compat with the rest of the code here:
-INPUT_CHANNELS_COUNT = 4
 class UtNet2(Denoiser):
     def __init__(
         self,
         in_channels: int,
         funit: int = 32,
-        activation: str = "ReLU",
+        activation: str = "LeakyReLU",
         preupsample: bool = False,
     ):
         super().__init__(in_channels=in_channels)
         # pm = 'reflect' # not implemented you suckers
         pm = 'zeros'
         pd = 1
-        self.enc0 = nn.Conv2d(INPUT_CHANNELS_COUNT, 32, 3, padding=pd, padding_mode=pm)
-        self.enc1 = nn.Conv2d(32, 48, 3, padding=pd, padding_mode=pm)
-        self.enc2 = nn.Conv2d(48, 64, 3, padding=pd, padding_mode=pm)
-        self.enc3 = nn.Conv2d(64, 80, 3, padding=pd, padding_mode=pm)
-        self.enc4 = nn.Conv2d(80, 112, 3, padding=pd, padding_mode=pm)
-        self.enc5 = nn.Conv2d(112, 112, 3, padding=pd, padding_mode=pm)
+        self.con0a = nn.Conv2d(       4,    funit, 3, padding=pd, padding_mode=pm)
+        self.enc0  = nn.Conv2d(   funit,  2*funit, 3, padding=pd, padding_mode=pm)
+        self.con1a = nn.Conv2d( 2*funit,  2*funit, 3, padding=pd, padding_mode=pm)
+        self.enc1  = nn.Conv2d( 2*funit,  4*funit, 3, padding=pd, padding_mode=pm)
+        self.con2a = nn.Conv2d( 4*funit,  4*funit, 3, padding=pd, padding_mode=pm)
+        self.enc2  = nn.Conv2d( 4*funit,  8*funit, 3, padding=pd, padding_mode=pm)
+        self.con3a = nn.Conv2d( 8*funit,  8*funit, 3, padding=pd, padding_mode=pm)
+        self.enc3  = nn.Conv2d( 8*funit, 16*funit, 3, padding=pd, padding_mode=pm)
+        self.con4a = nn.Conv2d(16*funit, 16*funit, 3, padding=pd, padding_mode=pm)
 
-        # self.extr = nn.Conv2d(32, 32, 3, padding=pd, padding_mode=pm)
+        self.con0  = nn.Conv2d(16*funit, 8*funit, 3, padding=pd, padding_mode=pm)
+        self.dec0  = nn.Conv2d(16*funit, 8*funit, 3, padding=pd, padding_mode=pm)
+        self.con0b = nn.Conv2d( 8*funit, 8*funit, 3, padding=pd, padding_mode=pm)
+        self.con1  = nn.Conv2d( 8*funit, 4*funit, 3, padding=pd, padding_mode=pm)
+        self.dec1  = nn.Conv2d( 8*funit, 4*funit, 3, padding=pd, padding_mode=pm)
+        self.con1b = nn.Conv2d( 4*funit, 4*funit, 3, padding=pd, padding_mode=pm)
+        self.con2  = nn.Conv2d( 4*funit, 2*funit, 3, padding=pd, padding_mode=pm)
+        self.dec2  = nn.Conv2d( 4*funit, 2*funit, 3, padding=pd, padding_mode=pm)
+        self.con2b = nn.Conv2d( 2*funit, 2*funit, 3, padding=pd, padding_mode=pm)
+        self.con3  = nn.Conv2d( 2*funit,   funit, 3, padding=pd, padding_mode=pm)
+        self.dec3  = nn.Conv2d( 2*funit,   funit, 3, padding=pd, padding_mode=pm)
+        self.con3b = nn.Conv2d(   funit,      12, 3, padding=pd, padding_mode=pm)
 
-        self.dec0 = nn.Conv2d(112+112, 112, 3, padding=pd, padding_mode=pm)
-        self.con0 = nn.Conv2d(112, 112, 3, padding=pd, padding_mode=pm)
-        self.dec1 = nn.Conv2d(112+80, 80, 3, padding=pd, padding_mode=pm)
-        self.con1 = nn.Conv2d(80, 80, 3, padding=pd, padding_mode=pm)
-        self.dec2 = nn.Conv2d(80+64, 64, 3, padding=pd, padding_mode=pm)
-        self.con2 = nn.Conv2d(64, 64, 3, padding=pd, padding_mode=pm)
-        self.dec3 = nn.Conv2d(64+48, 48, 3, padding=pd, padding_mode=pm)
-        self.con3 = nn.Conv2d(48, 48, 3, padding=pd, padding_mode=pm)
-        self.dec4 = nn.Conv2d(48+32, 16, 3, padding=pd, padding_mode=pm)
-        self.con4 = nn.Conv2d(16, 16, 3, padding=pd, padding_mode=pm)
-        self.dec5 = nn.Conv2d(16+INPUT_CHANNELS_COUNT, 12, 3, padding=pd, padding_mode=pm)
-        self.con5 = nn.Conv2d(12, 12, 3, padding=pd, padding_mode=pm)
-        # self.dec6 = nn.Conv2d(16, 3, 3, padding=pd, padding_mode=pm)
         self.pool = nn.MaxPool2d(2, 2)
         self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
 
-        self.con0a = nn.Conv2d(112, 112, 3, padding=pd, padding_mode=pm)
-        self.con1a = nn.Conv2d(80, 80, 3, padding=pd, padding_mode=pm)
-        self.con2a = nn.Conv2d(64, 64, 3, padding=pd, padding_mode=pm)
-        self.con3a = nn.Conv2d(48, 48, 3, padding=pd, padding_mode=pm)
-        self.con4a = nn.Conv2d(16, 16, 3, padding=pd, padding_mode=pm)
-        self.con5a = nn.Conv2d(12, 12, 3, padding=pd, padding_mode=pm)
         self.output_module = nn.PixelShuffle(2)
+        self.relu = nn.LeakyReLU(inplace=True, negative_slope=0.2)
 
     def forward(self, I):
-        # this appears to come in as RGGB, as expected
-        # print(I.size())
-        # mask = torch.tensor([1,0,0,1], dtype=torch.float32).unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
-        # DEBUG zero out one channel:
-        # I = I*mask.to("cuda")
-        extr = F.relu(self.enc0(I))
-        # extr = F.relu(self.extr(extr))
-        x_128 = self.pool(extr) # self.pool(F.relu(self.extr(extr)))
-        # XXX DEBUG x_128 comes out the same in python and in glsl
-        # return x_128[:,0:3,:,:]
-        # XXX DEBUG x     = F.relu(self.dec5(torch.cat([self.upsample(x),   I],  1)))
-        # x_128 = self.pool(F.relu(self.enc0(I)))
-        x_64  = self.pool(F.relu(self.enc1(x_128)))
-        x_32  = self.pool(F.relu(self.enc2(x_64)))
-        x_16  = self.pool(F.relu(self.enc3(x_32)))
-        # XXX DEBUG
-        # return x_16[:,0:3,:,:] # also comes out correctly
-        x_8   = self.pool(F.relu(self.enc4(x_16)))
-        # XXX DEBUG this is broken!!
-        # return x_8[:,0:3,:,:]
-        x_4   = self.pool(F.relu(self.enc5(x_8)))
-        # x_4 is mostly black
+        l0 = self.relu(self.con0a(I))
+        l1 = self.pool(self.relu(self.enc0(l0)))
+        l1 = self.relu(self.con1a(l1))
+        l2 = self.pool(self.relu(self.enc1(l1)))
+        l2 = self.relu(self.con2a(l2))
+        l3 = self.pool(self.relu(self.enc2(l2)))
+        l3 = self.relu(self.con3a(l3))
+        x  = self.pool(self.relu(self.enc3(l3)))
+        x  = self.relu(self.con4a(x))
         
-        x     = F.relu(self.dec0(torch.cat([self.upsample(x_4), x_8],   1)))
-        # XXX DEBUG this is broken!!
-        # return x[:,0:3,:,:]
-        x     = F.relu(self.con0(x))
-        x     = F.relu(self.con0a(x))
-        # x     = F.relu(self.dec1(torch.cat([self.upsample(x_8), x_16],  1)))
-        x     = F.relu(self.dec1(torch.cat([self.upsample(x),   x_16],  1)))
-        x     = F.relu(self.con1(x))
-        x     = F.relu(self.con1a(x))
-        x     = F.relu(self.dec2(torch.cat([self.upsample(x),   x_32],  1)))
-        x     = F.relu(self.con2(x))
-        x     = F.relu(self.con2a(x))
-        x     = F.relu(self.dec3(torch.cat([self.upsample(x),   x_64],  1)))
-        x     = F.relu(self.con3(x))
-        x     = F.relu(self.con3a(x))
-        x     = F.relu(self.dec4(torch.cat([self.upsample(x),   x_128], 1)))
-        # x     = F.relu(self.dec5(torch.cat([self.upsample(x),   extr],  1)))
-        x     = F.relu(self.con4(x))
-        x     = F.relu(self.con4a(x))
-        x     = F.relu(self.dec5(torch.cat([self.upsample(x),   I],  1)))
-        x     = F.relu(self.con5(x))
-        x     = F.relu(self.con5a(x))
-        return self.output_module(x)
-        # x     = F.relu(self.dec6(self.upsample(x)))
-        # return x
+        x  = self.relu(self.con0(self.upsample(x)))
+        x  = self.relu(self.dec0(torch.cat([x, l3], 1)))
+        x  = self.relu(self.con0b(x))
+        x  = self.relu(self.con1(self.upsample(x)))
+        x  = self.relu(self.dec1(torch.cat([x, l2], 1)))
+        x  = self.relu(self.con1b(x))
+        x  = self.relu(self.con2(self.upsample(x)))
+        x  = self.relu(self.dec2(torch.cat([x, l1], 1)))
+        x  = self.relu(self.con2b(x))
+        x  = self.relu(self.con3(self.upsample(x)))
+        x  = self.relu(self.dec3(torch.cat([x, l0], 1)))
+        x  = self.relu(self.con3b(x))
 
+        return self.output_module(x)
 
 class OriginalUtNet2(Denoiser):
     def __init__(

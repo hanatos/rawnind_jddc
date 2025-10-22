@@ -1849,6 +1849,7 @@ class BayerImageToImageNNTraining(ImageToImageNNTraining, BayerImageToImageNN):
         # loss.backward()
         self.scaler.scale(loss).backward()
         self.scaler.unscale_(optimizer)
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
         if isinstance(self, DenoiseCompressTraining):
             DenoiseCompressTraining.clip_gradient(optimizer, 5)
         # print(f"backward time: {time.time()-last_time}")

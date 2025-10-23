@@ -68,10 +68,10 @@ if __name__ == "__main__":
         # time it
         start = time.time()
         with torch.autocast(device_type="cuda", dtype=torch.float16):
-          out_image = model(input_image)
+            out_image = model(input_image)
         end = time.time()
-        # out_image = rawproc.match_gain(anchor_img=input_image, other_img=out_image)
-        # out_image = rawproc.camRGB_to_lin_rec2020_images(out_image, rgb_xyz_matrix)
+        out_image = rawproc.match_gain(anchor_img=input_image, other_img=out_image)
+        out_image = rawproc.camRGB_to_lin_rec2020_images(out_image, rgb_xyz_matrix)
         out_image = out_image.cpu()
         print(f"Saving to {output_fpath}. Processing time: {end - start:.2f} s")
         denoise_image.save_image(out_image, output_fpath, src_fpath=args.input_fpath)

@@ -85,6 +85,9 @@ class UtNet2(Denoiser):
 
         self.output_module = nn.PixelShuffle(2)
         self.relu = nn.LeakyReLU(inplace=True, negative_slope=0.2)
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
 
     def forward(self, I):
         l0 = self.relu(self.con0a(I))

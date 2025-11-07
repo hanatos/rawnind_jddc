@@ -208,7 +208,7 @@ class ImageToImageNN:
         elif fun_name == "pq":
             return rawproc.scenelin_to_pq
         elif fun_name == "gamma22":
-            return lambda img: rawproc.gamma(img, gamma_val=2.2, in_place=True)
+            return lambda img: rawproc.gamma(img, gamma_val=2.2, in_place=False)
         else:
             raise ValueError(fun_name)
 

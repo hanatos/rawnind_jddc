@@ -544,6 +544,8 @@ def camRGB_to_lin_rec2020_images(
 
     orig_dims = camRGB_images.shape
     # print(orig_dims)
+    torch.nan_to_num(camRGB_images,  nan=0, neginf=-1, posinf=1)
+    torch.nan_to_num(color_matrices, nan=0, neginf=-1, posinf=1)
     lin_rec2020_images = (
         color_matrices @ camRGB_images.reshape(orig_dims[0], 3, -1)
     ).reshape(orig_dims)

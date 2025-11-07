@@ -55,7 +55,8 @@ class UtNet2(Denoiser):
     ):
         super().__init__(in_channels=in_channels)
         # pm = 'reflect' # not implemented you suckers
-        pm = 'zeros'
+        pm = 'replicate'
+        # pm = 'zeros'
         pd = 1
         self.con0a = nn.Conv2d(       4,    funit, 3, padding=pd, padding_mode=pm)
         self.enc0  = nn.Conv2d(   funit,  2*funit, 3, padding=pd, padding_mode=pm)
@@ -87,7 +88,7 @@ class UtNet2(Denoiser):
         self.relu = nn.LeakyReLU(inplace=True, negative_slope=0.2)
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
+                nn.init.kaiming_normal_(m.weight, mode="fan_out", a=0.2, nonlinearity="leaky_relu")
 
     def forward(self, I):
         l0 = self.relu(self.con0a(I))

@@ -4,7 +4,6 @@ val_interval: 15000
 test_interval: 1500000
 loss: mse
 metrics:
-  - msssim_loss
   - mse
 patience: 100000
 lr_multiplier: 0.80

@@ -17,6 +17,6 @@ noise_dataset_yamlfpaths:
 funit: 32
 bayer_only: true
 #exposure_diff_penalty: 0.0001
-match_gain: output  # input, output, never
+match_gain: never # input, output, never
 data_pairing: x_y
 warmup_nsteps: 0

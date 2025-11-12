@@ -44,14 +44,14 @@ def np_l1(img1: np.ndarray, img2: np.ndarray, avg=True) -> Union[float, np.ndarr
     return np.abs(img1 - img2)
 
 
-def gamma(img: np.ndarray, gamma_val: float = GAMMA, in_place=False) -> np.ndarray:
+def gamma(img: np.ndarray, gamma_val: float = GAMMA, in_place=True) -> np.ndarray:
     """Apply gamma on positive values, maintain negative values as-is."""
     res = img if in_place else img.copy()
     res[res > 0] = res[res > 0] ** (1 / gamma_val)
     return res
 
 
-def gamma_pt(img: torch.Tensor, gamma_val: float = GAMMA, in_place=False) -> np.ndarray:
+def gamma_pt(img: torch.Tensor, gamma_val: float = GAMMA, in_place=True) -> np.ndarray:
     """Apply gamma on positive values, maintain negative values as-is."""
     res = img if in_place else img.clone()
     res[res > 0] = res[res > 0] ** (1 / gamma_val)

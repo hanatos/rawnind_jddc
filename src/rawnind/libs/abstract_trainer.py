@@ -208,7 +208,7 @@ class ImageToImageNN:
         elif fun_name == "pq":
             return rawproc.scenelin_to_pq
         elif fun_name == "gamma22":
-            return lambda img: rawproc.gamma(img, gamma_val=2.2, in_place=False)
+            return lambda img: rawproc.gamma(img, gamma_val=2.2, in_place=True)
         else:
             raise ValueError(fun_name)
 
@@ -1790,72 +1790,6 @@ class BayerImageToImageNNTraining(ImageToImageNNTraining, BayerImageToImageNN):
                 processed_output = self.process_net_output(
                     reconstructed_image, batch["rgb_xyz_matrix"], batch["x_crops"]
                 )
-                # if output_train_images:
-                if not torch.all(torch.isfinite(model_output)):
-                    # print(
-                    #    f"training {batch['y_crops'].mean((0,2,3))=}, {model_output.mean((0,2,3))=}"
-                    # )
-                    visu_save_dir = os.path.join(self.save_dpath, "visu", f"iter_{self.step_n}")
-                    os.makedirs(visu_save_dir, exist_ok=True)
-                    for i in range(reconstructed_image.shape[0]):
-                        with open(
-                            os.path.join(visu_save_dir, f"train_{i}_xyzm.txt"), "w"
-                        ) as fp:
-                            fp.write(f"{batch['rgb_xyz_matrix'][i]}")
-                        y_processed = (
-                            self.process_net_output(
-                                rawproc.demosaic(batch["y_crops"][i : i + 1].cpu()),
-                                batch["rgb_xyz_matrix"][i : i + 1].cpu(),
-                                batch["x_crops"][i : i + 1].cpu(),
-                            )
-                            .squeeze(0)
-                            .numpy()
-                        )
-                        raw.hdr_nparray_to_file(
-                            y_processed,
-                            os.path.join(
-                                visu_save_dir,
-                                f"train_{i}_debayered_ct_y.exr",
-                            ),
-                            color_profile="lin_rec2020",
-                        )
-                        raw.hdr_nparray_to_file(
-                            (processed_output[i].detach() * batch["mask_crops"][i])
-                            .cpu()
-                            .numpy(),
-                            os.path.join(
-                                visu_save_dir,
-                                f"train_{i}_processed_output_masked.exr",
-                            ),
-                            color_profile="lin_rec2020",
-                        )
-                        raw.hdr_nparray_to_file(
-                            processed_output[i].detach().cpu().numpy(),
-                            os.path.join(
-                                visu_save_dir,
-                                f"train_{i}_processed_output.exr",
-                            ),
-                            color_profile="lin_rec2020",
-                        )
-                        raw.hdr_nparray_to_file(
-                            (reconstructed_image[i].detach() * batch["mask_crops"][i])
-                            .cpu()
-                            .numpy(),
-                            os.path.join(
-                                visu_save_dir,
-                                f"train_{i}_output.exr",
-                            ),
-                            color_profile="lin_rec2020",
-                        )
-                        raw.hdr_nparray_to_file(
-                            batch["x_crops"][i].cpu().numpy(),
-                            os.path.join(
-                                visu_save_dir,
-                                f"train_{i}_gt.exr",
-                            ),
-                            color_profile="lin_rec2020",
-                        )
-                    sys.exit("argh")
                 processed_output = self.transfer(processed_output)
                 # print(f"processed_output time: {time.time()-last_time}")
                 # last_time = time.time()
@@ -1884,8 +1818,81 @@ class BayerImageToImageNNTraining(ImageToImageNNTraining, BayerImageToImageNN):
             optimizer.zero_grad()
             # loss.backward()
             self.scaler.scale(loss).backward()
+            made_a_mess = False
+            for name, param in self.model.named_parameters():
+              if torch.isnan(param.grad).any():
+                  made_a_mess = True
+            if not torch.all(torch.isfinite(model_output)):
+                made_a_mess = True
+
+            # if output_train_images:
+            if made_a_mess:
+                # print(
+                #    f"training {batch['y_crops'].mean((0,2,3))=}, {model_output.mean((0,2,3))=}"
+                # )
+                visu_save_dir = os.path.join(self.save_dpath, "visu", f"iter_{self.step_n}")
+                os.makedirs(visu_save_dir, exist_ok=True)
+                for i in range(reconstructed_image.shape[0]):
+                    with open(
+                        os.path.join(visu_save_dir, f"train_{i}_xyzm.txt"), "w"
+                    ) as fp:
+                        fp.write(f"{batch['rgb_xyz_matrix'][i]}")
+                    y_processed = (
+                        self.process_net_output(
+                            rawproc.demosaic(batch["y_crops"][i : i + 1].cpu()),
+                            batch["rgb_xyz_matrix"][i : i + 1].cpu(),
+                            batch["x_crops"][i : i + 1].cpu(),
+                        )
+                        .squeeze(0)
+                        .numpy()
+                    )
+                    raw.hdr_nparray_to_file(
+                        y_processed,
+                        os.path.join(
+                            visu_save_dir,
+                            f"train_{i}_debayered_ct_y.exr",
+                        ),
+                        color_profile="lin_rec2020",
+                    )
+                    raw.hdr_nparray_to_file(
+                        (processed_output[i].detach() * batch["mask_crops"][i])
+                        .cpu()
+                        .numpy(),
+                        os.path.join(
+                            visu_save_dir,
+                            f"train_{i}_processed_output_masked.exr",
+                        ),
+                        color_profile="lin_rec2020",
+                    )
+                    raw.hdr_nparray_to_file(
+                        processed_output[i].detach().cpu().numpy(),
+                        os.path.join(
+                            visu_save_dir,
+                            f"train_{i}_processed_output.exr",
+                        ),
+                        color_profile="lin_rec2020",
+                    )
+                    raw.hdr_nparray_to_file(
+                        (reconstructed_image[i].detach() * batch["mask_crops"][i])
+                        .cpu()
+                        .numpy(),
+                        os.path.join(
+                            visu_save_dir,
+                            f"train_{i}_output.exr",
+                        ),
+                        color_profile="lin_rec2020",
+                    )
+                    raw.hdr_nparray_to_file(
+                        batch["x_crops"][i].cpu().numpy(),
+                        os.path.join(
+                            visu_save_dir,
+                            f"train_{i}_gt.exr",
+                        ),
+                        color_profile="lin_rec2020",
+                    )
+                sys.exit("argh")
             self.scaler.unscale_(optimizer)
-            # torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=.10)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
             if isinstance(self, DenoiseCompressTraining):
                 DenoiseCompressTraining.clip_gradient(optimizer, 5)
             # print(f"backward time: {time.time()-last_time}")

@@ -1745,7 +1745,7 @@ class BayerImageToImageNNTraining(ImageToImageNNTraining, BayerImageToImageNN):
         # with torch.autocast(device_type="cuda",dtype=torch.float32):
         # with torch.autograd.detect_anomaly():
         if True:
-            with torch.autocast(device_type="cuda",enabled=True): # dtype=torch.float32):
+            with torch.autocast(device_type="cuda",enabled=False): # dtype=torch.float32):
                 # model_output = torch.clamp(torch.nan_to_num(self.model(batch["y_crops"]), nan=0.0, neginf=-1.0, posinf=1.0), min=-200, max=200)
 #                 if not torch.all(torch.isfinite(batch["y_crops"])):
 #                   print("input is b0rked!!")
@@ -1892,7 +1892,7 @@ class BayerImageToImageNNTraining(ImageToImageNNTraining, BayerImageToImageNN):
                     )
                 sys.exit("argh")
             self.scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+            # torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
             if isinstance(self, DenoiseCompressTraining):
                 DenoiseCompressTraining.clip_gradient(optimizer, 5)
             # print(f"backward time: {time.time()-last_time}")

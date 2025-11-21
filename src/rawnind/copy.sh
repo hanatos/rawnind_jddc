@@ -4,7 +4,7 @@ dir=$(ls -td  ../../models/rawnind_denoise/DenoiserTrainingBayerToProfiledRGB_4c
 dat=$(ls -t  ${dir}/saved_models/iter_*.pt.dat | head -1)
 sz=$(ls -l ${dat} | cut -d" " -f5)
 model="heavy"
-if (( 4308408 < 10000000 ))
+if (( ${sz} < 10000000 ))
 then
   model="light"
 fi

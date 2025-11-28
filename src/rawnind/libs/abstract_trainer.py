@@ -124,6 +124,8 @@ class ImageToImageNN:
         self.instantiate_model()
         if self.load_path:
             self.load_model(self.model, self.load_path, device=self.device)
+            if self.fp16 and os.path.exists(self.load_path + ".scl"):
+                self.scaler.load_state_dict(torch.load(self.load_path + ".scl"))
 
         # init metrics
         metrics = {}
@@ -543,6 +545,11 @@ class ImageToImageNNTraining(ImageToImageNN):
     # @classmethod
     def add_arguments(self, parser):
         super().add_arguments(parser)
+        parser.add_argument(
+            "--fp16",
+            action="store_true",
+            help="Enable FP16/mixed-precision training.",
+        )
 
         parser.add_argument(
             "--disable_retry_wait",
@@ -1215,6 +1222,8 @@ class ImageToImageNNTraining(ImageToImageNN):
         fpath = os.path.join(self.save_dpath, "saved_models", f"iter_{step}.pt")
         torch.save(self.model.state_dict(), fpath)
         torch.save(self.optimizer.state_dict(), fpath + ".opt")
+        if self.fp16:
+            torch.save(self.scaler.state_dict(), fpath + ".scl")
         # write raw f16 coefficients of the model into a file.
         # probably in the future also write some information about training data/loss/network configuration? like a hash?
         with open(fpath+'.dat', 'wb') as f:
@@ -1679,7 +1688,7 @@ class BayerImageToImageNN(ImageToImageNN):
 class BayerImageToImageNNTraining(ImageToImageNNTraining, BayerImageToImageNN):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.scaler = torch.amp.GradScaler(self.device)
+        self.scaler = torch.amp.GradScaler(self.device,enabled=self.fp16)
 
     @staticmethod
     # def repack_batch(batch: tuple[dict], device: torch.device) -> dict:  # python 38 310 compat
@@ -1745,7 +1754,7 @@ class BayerImageToImageNNTraining(ImageToImageNNTraining, BayerImageToImageNN):
         # with torch.autocast(device_type="cuda",dtype=torch.float32):
         # with torch.autograd.detect_anomaly():
         if True:
-            with torch.autocast(device_type="cuda",enabled=False): # dtype=torch.float32):
+            with torch.autocast(device_type=self.device.type,enabled=self.fp16): # dtype=torch.float32):
                 # model_output = torch.clamp(torch.nan_to_num(self.model(batch["y_crops"]), nan=0.0, neginf=-1.0, posinf=1.0), min=-200, max=200)
 #                 if not torch.all(torch.isfinite(batch["y_crops"])):
 #                   print("input is b0rked!!")

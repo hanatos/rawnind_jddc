@@ -1,7 +1,8 @@
-init_lr: 0.00001
+init_lr: 0.0001
 tot_steps: 60000000
 val_interval: 15000
 test_interval: 1500000
+fp16: False
 loss: msssim_loss
 metrics:
   - mse
@@ -15,7 +16,7 @@ clean_dataset_yamlfpaths:
   - ../../datasets/extraraw/raw-pixls/crops_metadata.yaml
 noise_dataset_yamlfpaths:
   - ../../datasets/RawNIND/RawNIND_masks_and_alignments.yaml
-funit: 32
+funit: 16
 bayer_only: true
 #exposure_diff_penalty: 0.0001
 match_gain: input # input, output, never
